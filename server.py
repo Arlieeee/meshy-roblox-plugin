@@ -271,7 +271,7 @@ async def oauth_callback(code: str = Query(...), state: str = Query(...)):
 
 class ImportRequest(BaseModel):
     modelUrl: str
-    format: str = "fbx"
+    format: str = "glb"
     displayName: str = "Meshy Model"
     description: str = "Created with Meshy AI"
 
@@ -307,38 +307,46 @@ async def import_model(request: ImportRequest):
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="Model download timed out")
 
-    # Step 1.5: Extract FBX from ZIP if needed
-    # Meshy downloads are often ZIP files containing FBX + textures
+    # Step 1.5: Extract model from ZIP if needed
+    # Meshy may return ZIP (e.g. one .glb with embedded textures) or a single file (.glb)
+    file_format = request.format
     model_data = raw_data
     if zipfile.is_zipfile(io.BytesIO(raw_data)):
-        print(f"[Upload] File is a ZIP archive, extracting .fbx...")
+        target_extensions = {
+            "fbx": [".fbx"],
+            "glb": [".glb"],
+            "gltf": [".gltf", ".glb"],
+            "obj": [".obj"],
+        }
+        extensions = target_extensions.get(file_format, [".glb", ".fbx"])
+        print(f"[Upload] File is a ZIP archive, looking for {extensions}...")
         with zipfile.ZipFile(io.BytesIO(raw_data)) as zf:
-            fbx_files = [f for f in zf.namelist() if f.lower().endswith(".fbx")]
-            if fbx_files:
-                fbx_name = fbx_files[0]
-                model_data = zf.read(fbx_name)
-                print(f"[Upload] Extracted '{fbx_name}': {len(model_data)} bytes")
+            model_file = None
+            for name in zf.namelist():
+                if any(name.lower().endswith(ext) for ext in extensions):
+                    model_file = name
+                    break
+            if model_file:
+                model_data = zf.read(model_file)
+                # Infer format from extension if we were searching multiple
+                if model_file.lower().endswith(".glb"):
+                    file_format = "glb"
+                elif model_file.lower().endswith(".gltf"):
+                    file_format = "gltf"
+                elif model_file.lower().endswith(".fbx"):
+                    file_format = "fbx"
+                elif model_file.lower().endswith(".obj"):
+                    file_format = "obj"
+                print(f"[Upload] Extracted '{model_file}': {len(model_data)} bytes (format={file_format})")
             else:
-                # No FBX in ZIP, try GLB/OBJ
-                glb_files = [f for f in zf.namelist() if f.lower().endswith((".glb", ".gltf"))]
-                obj_files = [f for f in zf.namelist() if f.lower().endswith(".obj")]
-                if glb_files:
-                    model_data = zf.read(glb_files[0])
-                    request.format = "glb"
-                    print(f"[Upload] No FBX found, extracted GLB '{glb_files[0]}': {len(model_data)} bytes")
-                elif obj_files:
-                    model_data = zf.read(obj_files[0])
-                    request.format = "obj"
-                    print(f"[Upload] No FBX found, extracted OBJ '{obj_files[0]}': {len(model_data)} bytes")
-                else:
-                    all_files = zf.namelist()
-                    print(f"[Upload] ZIP contents: {all_files}")
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"No supported 3D model file found in ZIP. Contents: {all_files}",
-                    )
+                all_files = zf.namelist()
+                print(f"[Upload] ZIP contents: {all_files}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No {file_format} model file found in ZIP. Contents: {all_files}",
+                )
     else:
-        print(f"[Upload] File is raw {request.format} ({len(model_data)} bytes)")
+        print(f"[Upload] File is raw {file_format} ({len(model_data)} bytes)")
 
     # Step 2: Upload to Roblox
     request_payload = json.dumps({
@@ -352,19 +360,20 @@ async def import_model(request: ImportRequest):
         },
     })
 
-    content_type_map = {
+    format_to_content_type = {
         "fbx": "model/fbx",
-        "obj": "model/obj",
         "glb": "model/gltf-binary",
+        "gltf": "model/gltf+json",
+        "obj": "model/obj",
     }
+    content_type = format_to_content_type.get(file_format, "model/gltf-binary")
     file_ext_map = {
         "fbx": "model.fbx",
-        "obj": "model.obj",
         "glb": "model.glb",
+        "gltf": "model.gltf",
+        "obj": "model.obj",
     }
-
-    file_content_type = content_type_map.get(request.format, "application/octet-stream")
-    file_name = file_ext_map.get(request.format, "model.fbx")
+    file_name = file_ext_map.get(file_format, "model.glb")
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -373,7 +382,7 @@ async def import_model(request: ImportRequest):
                 headers={"Authorization": f"Bearer {access_token}"},
                 files={
                     "request": (None, request_payload, "application/json"),
-                    "fileContent": (file_name, model_data, file_content_type),
+                    "fileContent": (file_name, model_data, content_type),
                 },
             )
     except httpx.TimeoutException:
