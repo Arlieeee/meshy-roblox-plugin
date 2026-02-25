@@ -18,9 +18,9 @@ API 端点（兼容 DCC Bridge 模式）:
 
 import base64
 import hashlib
+import html
 import io
 import json
-import os
 import secrets
 import time
 import webbrowser
@@ -28,21 +28,19 @@ import zipfile
 from urllib.parse import urlencode
 
 import httpx
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-load_dotenv()
-
 # ============ Configuration ============
 
-ROBLOX_CLIENT_ID = os.getenv("ROBLOX_CLIENT_ID")
-ROBLOX_CLIENT_SECRET = os.getenv("ROBLOX_CLIENT_SECRET")
-ROBLOX_REDIRECT_URI = os.getenv("ROBLOX_REDIRECT_URI", "http://localhost:5330/roblox/callback")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3700")
-PORT = int(os.getenv("PORT", "5330"))
+ROBLOX_CLIENT_ID = "5736123519074675650"
+ROBLOX_CLIENT_SECRET = "RBX-u7klWvZeE0qQPSgwTqMPihH3ExBCDV0YlQ4gv1WEkWQnlH40U_CjUgRScRl-VbAy"
+ROBLOX_REDIRECT_URI = "http://localhost:5330/roblox/callback"
+
+FRONTEND_URL = "http://localhost:3700"
+PORT = 5330
 
 # Roblox OAuth endpoints
 ROBLOX_AUTH_URL = "https://apis.roblox.com/oauth/v1/authorize"
@@ -52,7 +50,6 @@ ROBLOX_REVOKE_URL = "https://apis.roblox.com/oauth/v1/token/revoke"
 ROBLOX_ASSETS_URL = "https://apis.roblox.com/assets/v1/assets"
 
 SCOPES = "openid profile asset:read asset:write"
-
 # ============ In-memory storage ============
 
 oauth_states: dict[str, dict] = {}
@@ -65,7 +62,7 @@ app = FastAPI(title="Meshy Roblox Bridge")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有来源（本地Bridge不需要限制）
+    allow_origins=[FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,7 +71,7 @@ app.add_middleware(
 # ============ Helper Functions ============
 
 
-def generate_pkce():
+def generate_pkce() -> tuple[str, str]:
     code_verifier = secrets.token_urlsafe(64)
     code_challenge = base64.urlsafe_b64encode(
         hashlib.sha256(code_verifier.encode()).digest()
@@ -82,13 +79,13 @@ def generate_pkce():
     return code_verifier, code_challenge
 
 
-def get_auth_header():
+def get_auth_header() -> str:
     credentials = f"{ROBLOX_CLIENT_ID}:{ROBLOX_CLIENT_SECRET}"
     encoded = base64.b64encode(credentials.encode()).decode()
     return f"Basic {encoded}"
 
 
-async def refresh_access_token():
+async def refresh_access_token() -> bool:
     if not user_tokens.get("refresh_token"):
         return False
 
@@ -119,7 +116,7 @@ async def refresh_access_token():
         return False
 
 
-async def get_valid_access_token():
+async def get_valid_access_token() -> "str | None":
     if not user_tokens.get("access_token"):
         return None
 
@@ -155,6 +152,12 @@ async def roblox_authorize():
     返回 Roblox OAuth 授权 URL（供前端弹窗使用）
     前端拿到 auth_url 后会在弹窗中打开
     """
+    # Clean up expired states (older than 10 minutes)
+    cutoff = time.time() - 600
+    expired = [k for k, v in oauth_states.items() if v.get("created_at", 0) < cutoff]
+    for k in expired:
+        del oauth_states[k]
+
     state = secrets.token_urlsafe(32)
     code_verifier, code_challenge = generate_pkce()
 
@@ -399,7 +402,9 @@ async def import_model(request: ImportRequest):
 
     result = upload_response.json()
     operation_path = result.get("path", "")
-    operation_id = operation_path.split("/")[-1] if operation_path else "unknown"
+    if not operation_path:
+        raise HTTPException(status_code=502, detail="Roblox did not return an operation path")
+    operation_id = operation_path.split("/")[-1]
 
     upload_operations[operation_id] = {
         "status": "processing",
@@ -452,6 +457,12 @@ async def import_model(request: ImportRequest):
 @app.get("/upload-status/{operation_id}")
 async def upload_status(operation_id: str):
     """轮询上传状态"""
+    # Clean up expired upload operations (older than 1 hour)
+    cutoff = time.time() - 3600
+    expired = [k for k, v in upload_operations.items() if v.get("created_at", 0) < cutoff]
+    for k in expired:
+        del upload_operations[k]
+
     access_token = await get_valid_access_token()
     if not access_token:
         raise HTTPException(status_code=401, detail="Not connected to Roblox")
@@ -605,7 +616,7 @@ def _result_page(status: str, message: str, frontend_url: str = "http://localhos
         <div class="container">
             <div class="icon">&#10003;</div>
             <h1>Connected to Roblox!</h1>
-            <p>Welcome, {message}</p>
+            <p>Welcome, {html.escape(message)}</p>
             <p>You can close this window and return to Meshy.</p>
             <p style="color:#666; font-size:12px; margin-top:24px;">This window will close automatically.</p>
         </div>
@@ -614,11 +625,12 @@ def _result_page(status: str, message: str, frontend_url: str = "http://localhos
             if (window.opener) {{
                 window.opener.postMessage(
                     {{ type: "ROBLOX_OAUTH_SUCCESS" }},
-                    "{frontend_url}"
+                    {json.dumps(frontend_url)}
                 );
-                // Auto-close after a short delay
-                setTimeout(function() {{ window.close(); }}, 2000);
             }}
+            // Always auto-close -- even if window.opener is lost due to
+            // cross-origin navigation (e.g. "Change Account" flow)
+            setTimeout(function() {{ window.close(); }}, 2000);
         </script>
         </body>
         </html>
@@ -640,13 +652,13 @@ def _result_page(status: str, message: str, frontend_url: str = "http://localhos
         <div class="container">
             <div class="icon">&#10007;</div>
             <h1>Connection Failed</h1>
-            <p>{message}</p>
+            <p>{html.escape(message)}</p>
         </div>
         <script>
             if (window.opener) {{
                 window.opener.postMessage(
-                    {{ type: "ROBLOX_OAUTH_ERROR", error: "{message}" }},
-                    "{frontend_url}"
+                    {{ type: "ROBLOX_OAUTH_ERROR", error: {json.dumps(message)} }},
+                    {json.dumps(frontend_url)}
                 );
             }}
         </script>
@@ -678,4 +690,4 @@ if __name__ == "__main__":
     print("  Ready! Open Meshy Webapp to start using.")
     print("=" * 60)
 
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run(app, host="127.0.0.1", port=PORT)
