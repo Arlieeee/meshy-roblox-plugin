@@ -17,12 +17,18 @@ API 端点（兼容 DCC Bridge 模式）:
 """
 
 import base64
+import datetime
 import hashlib
 import html
 import io
 import json
+import os
+import queue
 import secrets
+import sys
+import threading
 import time
+import tkinter as tk
 import webbrowser
 import zipfile
 from urllib.parse import urlencode
@@ -39,7 +45,7 @@ ROBLOX_CLIENT_ID = "5736123519074675650"
 ROBLOX_CLIENT_SECRET = "RBX-u7klWvZeE0qQPSgwTqMPihH3ExBCDV0YlQ4gv1WEkWQnlH40U_CjUgRScRl-VbAy"
 ROBLOX_REDIRECT_URI = "http://localhost:5330/roblox/callback"
 
-FRONTEND_URL = "http://localhost:3700"
+FRONTEND_URL = "https://meshy-webapp-pr-5137-taichi-dev.vercel.app"
 PORT = 5330
 
 # Roblox OAuth endpoints
@@ -667,27 +673,311 @@ def _result_page(status: str, message: str, frontend_url: str = "http://localhos
         """
 
 
+# ============ GUI ============
+
+
+class _StdoutToQueue:
+    """Redirect stdout to a queue so the GUI can display it thread-safely."""
+
+    def __init__(self, q: "queue.Queue[str]", original):
+        self._q = q
+        self._orig = original
+
+    def write(self, text: str):
+        stripped = text.rstrip("\n").strip()
+        if stripped:
+            self._q.put(stripped)
+        if self._orig:
+            try:
+                self._orig.write(text)
+            except Exception:
+                pass
+
+    def flush(self):
+        if self._orig:
+            try:
+                self._orig.flush()
+            except Exception:
+                pass
+
+
+class BridgeGUI:
+    # ── Meshy Palette ─────────────────────────────────────────────
+    C_BG      = "#181818"   # Meshy black
+    C_CARD    = "#1f1f1f"   # card surface
+    C_BORDER  = "#2a2a2a"
+    C_LIME    = "#C5F955"   # Meshy acid lime  — success / running
+    C_PINK    = "#FF3E8F"   # Meshy pink       — error / warning
+    C_GRAY    = "#555555"   # idle dot
+    C_TEXT    = "#ffffff"
+    C_DIM     = "#888888"
+    C_LOG_BG  = "#111111"
+
+    def __init__(self, port: int):
+        self.port = port
+        self._q: "queue.Queue[str]" = queue.Queue()
+        self.root = tk.Tk()
+        self._build_window()
+        self._build_ui()
+
+    # ── Window ────────────────────────────────────────────────────
+
+    def _build_window(self):
+        # Enable Per-Monitor DPI awareness so the window is crisp on HiDPI screens
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
+
+        self.root.title("Meshy Roblox Bridge")
+        self.root.geometry("500x600")
+        self.root.resizable(False, False)
+        self.root.configure(bg=self.C_BG)
+        try:
+            base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+            self.root.iconbitmap(os.path.join(base, "icon.ico"))
+        except Exception:
+            pass
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ── UI ────────────────────────────────────────────────────────
+
+    def _build_ui(self):
+        self._build_header()
+        self._build_status_card()
+        self._build_log_area()
+        self._build_footer()
+
+    def _build_header(self):
+        frm = tk.Frame(self.root, bg=self.C_CARD, pady=22)
+        frm.pack(fill=tk.X)
+        # "Meshy" in lime, rest in white
+        title_row = tk.Frame(frm, bg=self.C_CARD)
+        title_row.pack()
+        tk.Label(
+            title_row, text="Meshy",
+            font=("Segoe UI", 18, "bold"),
+            fg=self.C_LIME, bg=self.C_CARD,
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            title_row, text=" Roblox Bridge",
+            font=("Segoe UI", 18, "bold"),
+            fg=self.C_TEXT, bg=self.C_CARD,
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            frm, text=f"localhost:{self.port}",
+            font=("Segoe UI", 10),
+            fg=self.C_DIM, bg=self.C_CARD,
+        ).pack(pady=(4, 0))
+
+    def _build_status_card(self):
+        outer = tk.Frame(self.root, bg=self.C_BG, padx=20, pady=16)
+        outer.pack(fill=tk.X)
+        card = tk.Frame(outer, bg=self.C_CARD, padx=20, pady=18)
+        card.pack(fill=tk.X)
+
+        self._server_dot, self._server_lbl = self._status_row(card, "Server")
+        self._dot_set(self._server_dot, self.C_GRAY)
+        self._server_lbl.configure(text="Starting…", fg=self.C_DIM)
+
+        tk.Frame(card, bg=self.C_BORDER, height=1).pack(fill=tk.X, pady=12)
+
+        self._roblox_dot, self._roblox_lbl = self._status_row(card, "Roblox Account")
+        self._dot_set(self._roblox_dot, self.C_GRAY)
+        self._roblox_lbl.configure(text="Not Connected", fg=self.C_DIM)
+
+    def _status_row(self, parent, label: str):
+        row = tk.Frame(parent, bg=self.C_CARD)
+        row.pack(fill=tk.X)
+        tk.Label(row, text=label, font=("Segoe UI", 11),
+                 fg=self.C_DIM, bg=self.C_CARD).pack(side=tk.LEFT)
+        dot = tk.Canvas(row, width=10, height=10,
+                        bg=self.C_CARD, highlightthickness=0)
+        dot.pack(side=tk.RIGHT)
+        val = tk.Label(row, text="", font=("Segoe UI", 11, "bold"),
+                       fg=self.C_TEXT, bg=self.C_CARD)
+        val.pack(side=tk.RIGHT, padx=(0, 10))
+        return dot, val
+
+    def _build_log_area(self):
+        outer = tk.Frame(self.root, bg=self.C_BG, padx=20)
+        outer.pack(fill=tk.BOTH, expand=True)
+        tk.Label(outer, text="Activity Log", font=("Segoe UI", 9),
+                 fg=self.C_DIM, bg=self.C_BG).pack(anchor=tk.W, pady=(0, 4))
+        self._log = tk.Text(
+            outer,
+            bg=self.C_LOG_BG, fg=self.C_DIM,
+            font=("Consolas", 9),
+            relief=tk.FLAT, padx=12, pady=10,
+            wrap=tk.WORD, state=tk.DISABLED,
+            height=14,
+        )
+        self._log.pack(fill=tk.BOTH, expand=True)
+        self._log.tag_configure("ts",     foreground="#444444")
+        self._log.tag_configure("info",   foreground="#666666")
+        self._log.tag_configure("ok",     foreground=self.C_LIME)
+        self._log.tag_configure("err",    foreground=self.C_PINK)
+        self._log.tag_configure("oauth",  foreground="#aaaaaa")
+        self._log.tag_configure("upload", foreground="#cccccc")
+
+    def _build_footer(self):
+        frm = tk.Frame(self.root, bg=self.C_CARD, pady=13)
+        frm.pack(fill=tk.X, side=tk.BOTTOM)
+        tk.Label(
+            frm,
+            text="Open Meshy Workspace to start using the bridge",
+            font=("Segoe UI", 9),
+            fg=self.C_DIM, bg=self.C_CARD,
+        ).pack()
+
+    # ── Dot helper ────────────────────────────────────────────────
+
+    def _dot_set(self, canvas: tk.Canvas, color: str):
+        canvas.delete("all")
+        canvas.create_oval(1, 1, 9, 9, fill=color, outline="")
+
+    # ── Logging ───────────────────────────────────────────────────
+
+    def _tag_for(self, msg: str) -> str:
+        lo = msg.lower()
+        if any(k in lo for k in ("oauth", "token", "auth", "connect", "disconnect")):
+            return "oauth"
+        if any(k in lo for k in ("upload", "poll", "asset", "download", "zip", "extract")):
+            return "upload"
+        if any(k in lo for k in ("error", "fail", "exception", "invalid", "denied")):
+            return "err"
+        if any(k in lo for k in ("success", "completed", "ready", "started", "running")):
+            return "ok"
+        return "info"
+
+    def _flush_queue(self):
+        try:
+            while True:
+                msg = self._q.get_nowait()
+                self._append_log(msg)
+        except queue.Empty:
+            pass
+        self.root.after(80, self._flush_queue)
+
+    def _append_log(self, message: str):
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        tag = self._tag_for(message)
+        self._log.configure(state=tk.NORMAL)
+        self._log.insert(tk.END, f"[{ts}] ", "ts")
+        self._log.insert(tk.END, f"{message}\n", tag)
+        self._log.see(tk.END)
+        total = int(self._log.index("end-1c").split(".")[0])
+        if total > 500:
+            self._log.delete("1.0", f"{total - 500}.0")
+        self._log.configure(state=tk.DISABLED)
+
+    # ── Status setters (thread-safe via root.after) ───────────────
+
+    def _set_server_ok(self):
+        self._dot_set(self._server_dot, self.C_LIME)
+        self._server_lbl.configure(text="Running", fg=self.C_LIME)
+
+    def _set_server_error(self, text="Error"):
+        self._dot_set(self._server_dot, self.C_PINK)
+        self._server_lbl.configure(text=text, fg=self.C_PINK)
+
+    def _poll_roblox(self):
+        connected = bool(user_tokens.get("access_token"))
+        username = (user_tokens.get("user_info") or {}).get("username", "")
+        if connected:
+            self._dot_set(self._roblox_dot, self.C_LIME)
+            self._roblox_lbl.configure(
+                text=username or "Connected", fg=self.C_LIME)
+        else:
+            self._dot_set(self._roblox_dot, self.C_GRAY)
+            self._roblox_lbl.configure(text="Not Connected", fg=self.C_DIM)
+        self.root.after(2500, self._poll_roblox)
+
+    # ── Server thread ─────────────────────────────────────────────
+
+    def _run_server(self):
+        import socket as _sock
+        import uvicorn
+
+        # Detect duplicate instance before binding
+        probe = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
+        probe.settimeout(0.5)
+        try:
+            probe.connect(("127.0.0.1", self.port))
+            probe.close()
+            self._q.put("Another instance is already running on this port.")
+            self.root.after(0, self._on_duplicate)
+            return
+        except (_sock.timeout, ConnectionRefusedError, OSError):
+            probe.close()
+
+        self._q.put(f"Starting server…")
+        try:
+            import logging
+            logging.basicConfig(
+                level=logging.WARNING,
+                format="%(message)s",
+                stream=sys.stdout,
+                force=True,
+            )
+            config = uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=self.port,
+                log_level="warning",
+                access_log=False,
+                log_config=None,
+            )
+            server = uvicorn.Server(config)
+            self.root.after(0, self._set_server_ok)
+            self._q.put("Server started!")
+            self._q.put("Open Meshy Workspace and click Send to Roblox to get started.")
+            self._q.put("─" * 38)
+            server.run()
+        except OSError:
+            self._q.put("Port already in use — another instance may be running.")
+            self.root.after(0, self._on_duplicate)
+        except Exception as exc:
+            self._q.put(f"Server error: {exc}")
+            self.root.after(0, lambda: self._set_server_error("Error"))
+
+    def _on_duplicate(self):
+        import tkinter.messagebox as mb
+        self._set_server_error("Already Running")
+        mb.showwarning(
+            "Already Running",
+            f"Meshy Roblox Bridge is already running on port {self.port}.\n\n"
+            "Only one instance can run at a time.\n"
+            "This window will stay open but the server is inactive.",
+        )
+
+    # ── Lifecycle ─────────────────────────────────────────────────
+
+    def _on_close(self):
+        self.root.destroy()
+
+    def run(self):
+        sys.stdout = _StdoutToQueue(self._q, sys.__stdout__)
+
+        # Enqueue banner before starting the server thread so it always
+        # appears first in the log (queue is FIFO, server messages follow).
+        for line in [
+            "Meshy Roblox Bridge v0.1.0",
+            "─" * 38,
+        ]:
+            self._q.put(line)
+
+        threading.Thread(target=self._run_server, daemon=True).start()
+        self.root.after(80, self._flush_queue)
+        self.root.after(2500, self._poll_roblox)
+        self.root.mainloop()
+
+
 # ============ Main ============
 
 if __name__ == "__main__":
-    import uvicorn
-
-    print()
-    print("=" * 60)
-    print("  Meshy Roblox Bridge v0.1.0")
-    print("=" * 60)
-    print(f"  Port:         {PORT}")
-    print(f"  Roblox App:   {ROBLOX_CLIENT_ID}")
-    print(f"  Redirect URI: {ROBLOX_REDIRECT_URI}")
-    print("=" * 60)
-    print()
-    print("  Endpoints:")
-    print(f"    GET  http://localhost:{PORT}/status           - Bridge status")
-    print(f"    POST http://localhost:{PORT}/connect          - Connect Roblox")
-    print(f"    POST http://localhost:{PORT}/import           - Upload model")
-    print(f"    GET  http://localhost:{PORT}/upload-status/id - Poll status")
-    print()
-    print("  Ready! Open Meshy Webapp to start using.")
-    print("=" * 60)
-
-    uvicorn.run(app, host="127.0.0.1", port=PORT)
+    BridgeGUI(PORT).run()

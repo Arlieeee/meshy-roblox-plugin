@@ -1,0 +1,77 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.name }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller pillow
+
+      # macOS: convert icon.ico → icon.png → icon.icns
+      - name: Convert icon to icns (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python - <<'EOF'
+          from PIL import Image
+          import os, subprocess
+
+          img = Image.open("icon.ico")
+          os.makedirs("icon.iconset", exist_ok=True)
+          sizes = [16, 32, 64, 128, 256, 512]
+          for s in sizes:
+              resized = img.resize((s, s), Image.LANCZOS)
+              resized.save(f"icon.iconset/icon_{s}x{s}.png")
+              resized2 = img.resize((s * 2, s * 2), Image.LANCZOS)
+              resized2.save(f"icon.iconset/icon_{s}x{s}@2x.png")
+
+          subprocess.run(["iconutil", "-c", "icns", "icon.iconset", "-o", "icon.icns"], check=True)
+          print("icon.icns created successfully")
+          EOF
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: pyinstaller MeshyRobloxBridge.spec
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: pyinstaller MeshyRobloxBridge.spec
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshyRobloxBridge-windows
+          path: dist/MeshyRobloxBridge.exe
+          retention-days: 30
+
+      - name: Upload artifact (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshyRobloxBridge-macos
+          path: dist/MeshyRobloxBridge.app
+          retention-days: 30
