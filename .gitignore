@@ -21,3 +21,6 @@ build/
 
 # env
 .env
+
+# AI-generated documentation drafts (intermediate output)
+docs-draft/
