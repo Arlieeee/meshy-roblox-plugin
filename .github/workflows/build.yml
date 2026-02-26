@@ -39,7 +39,7 @@ jobs:
           from PIL import Image
           import os, subprocess
 
-          img = Image.open("icon.ico")
+          img = Image.open("assets/icon.ico")
           os.makedirs("icon.iconset", exist_ok=True)
           sizes = [16, 32, 64, 128, 256, 512]
           for s in sizes:
@@ -48,17 +48,17 @@ jobs:
               resized2 = img.resize((s * 2, s * 2), Image.LANCZOS)
               resized2.save(f"icon.iconset/icon_{s}x{s}@2x.png")
 
-          subprocess.run(["iconutil", "-c", "icns", "icon.iconset", "-o", "icon.icns"], check=True)
-          print("icon.icns created successfully")
+          subprocess.run(["iconutil", "-c", "icns", "icon.iconset", "-o", "assets/icon.icns"], check=True)
+          print("assets/icon.icns created successfully")
           EOF
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        run: pyinstaller MeshyRobloxBridge.spec
+        run: pyinstaller spec/MeshyRobloxBridge.spec
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
-        run: pyinstaller MeshyRobloxBridge.spec
+        run: pyinstaller spec/MeshyRobloxBridge.spec
 
       - name: Upload artifact (Windows)
         if: runner.os == 'Windows'

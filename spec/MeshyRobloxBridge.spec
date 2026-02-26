@@ -5,7 +5,7 @@ a = Analysis(
     ['server.py'],
     pathex=[],
     binaries=[],
-    datas=[('icon.ico', '.')],
+    datas=[('assets/icon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -25,7 +25,7 @@ if sys.platform == 'win32':
         a.datas,
         [],
         name='MeshyRobloxBridge',
-        icon='icon.ico',
+        icon='assets/icon.ico',
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -49,7 +49,7 @@ else:
         a.datas,
         [],
         name='MeshyRobloxBridge',
-        icon='icon.icns',          # convert icon.ico → icon.icns on mac
+        icon='assets/icon.icns',   # convert assets/icon.ico → assets/icon.icns on mac
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -67,7 +67,7 @@ else:
     app = BUNDLE(
         exe,
         name='MeshyRobloxBridge.app',
-        icon='icon.icns',
+        icon='assets/icon.icns',
         bundle_identifier='ai.meshy.roblox-bridge',
         info_plist={
             'CFBundleDisplayName': 'Meshy Roblox Bridge',
