@@ -298,9 +298,7 @@ async def import_model(request: ImportRequest):
     if not user_id:
         raise HTTPException(status_code=400, detail="User ID not found")
 
-    print(f"[Upload] Starting upload...")
-    print(f"[Upload] Model URL: {request.modelUrl[:80]}...")
-    print(f"[Upload] Display name: {request.displayName}")
+    print(f"[Upload] Starting: {request.displayName}")
 
     # Step 1: Download model file
     try:
@@ -312,7 +310,7 @@ async def import_model(request: ImportRequest):
                     detail=f"Failed to download model: {model_response.status_code}",
                 )
             raw_data = model_response.content
-            print(f"[Upload] Downloaded: {len(raw_data)} bytes")
+            print(f"[Upload] Model downloaded ({len(raw_data) // 1024} KB)")
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="Model download timed out")
 
@@ -328,7 +326,7 @@ async def import_model(request: ImportRequest):
             "obj": [".obj"],
         }
         extensions = target_extensions.get(file_format, [".glb", ".fbx"])
-        print(f"[Upload] File is a ZIP archive, looking for {extensions}...")
+        print(f"[Upload] Extracting {file_format.upper()} from ZIP...")
         with zipfile.ZipFile(io.BytesIO(raw_data)) as zf:
             model_file = None
             for name in zf.namelist():
@@ -346,16 +344,16 @@ async def import_model(request: ImportRequest):
                     file_format = "fbx"
                 elif model_file.lower().endswith(".obj"):
                     file_format = "obj"
-                print(f"[Upload] Extracted '{model_file}': {len(model_data)} bytes (format={file_format})")
+                print(f"[Upload] Extracted {file_format.upper()} ({len(model_data) // 1024} KB)")
             else:
                 all_files = zf.namelist()
-                print(f"[Upload] ZIP contents: {all_files}")
+                print(f"[Upload] No {file_format} found in ZIP: {all_files}")
                 raise HTTPException(
                     status_code=400,
                     detail=f"No {file_format} model file found in ZIP. Contents: {all_files}",
                 )
     else:
-        print(f"[Upload] File is raw {file_format} ({len(model_data)} bytes)")
+        print(f"[Upload] {file_format.upper()} file ({len(model_data) // 1024} KB)")
 
     # Step 2: Upload to Roblox
     request_payload = json.dumps({
@@ -397,8 +395,7 @@ async def import_model(request: ImportRequest):
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="Upload to Roblox timed out")
 
-    print(f"[Upload] Roblox response: {upload_response.status_code}")
-    print(f"[Upload] Response body: {upload_response.text[:500]}")
+    print(f"[Upload] Uploading to Roblox...")
 
     if upload_response.status_code not in (200, 201):
         raise HTTPException(
@@ -494,10 +491,10 @@ async def upload_status(operation_id: str):
                 headers={"Authorization": f"Bearer {access_token}"},
             )
     except httpx.TimeoutException:
-        print(f"[Poll] Timeout for operation {operation_id}")
+        print(f"[Poll] Timeout, retrying...")
         return {"success": True, "result": {"operationId": operation_id, "status": "processing"}}
 
-    print(f"[Poll] Operation {operation_id}: {response.status_code} {response.text[:300]}")
+    print(f"[Poll] Checking upload status...")
 
     if response.status_code != 200:
         return {"success": True, "result": {"operationId": operation_id, "status": "processing"}}
@@ -509,11 +506,11 @@ async def upload_status(operation_id: str):
         if data.get("error"):
             error = data["error"]
             error_msg = error.get("message", "Unknown error")
-            print(f"[Poll] Operation {operation_id} FAILED: {error_msg}")
-            upload_operations[operation_id] = {
+            print(f"[Poll] Upload failed: {error_msg}")
+            upload_operations[operation_id].update({
                 "status": "failed",
                 "error": error_msg,
-            }
+            })
             return {
                 "success": False,
                 "result": {
@@ -527,12 +524,11 @@ async def upload_status(operation_id: str):
         asset_id = str(asset_response.get("assetId", ""))
 
         if not asset_id:
-            # done=true but no assetId means something went wrong
-            print(f"[Poll] Operation {operation_id} done but no assetId! Response: {data}")
-            upload_operations[operation_id] = {
+            print(f"[Poll] Upload done but no asset ID returned")
+            upload_operations[operation_id].update({
                 "status": "failed",
                 "error": "Upload completed but no Asset ID returned",
-            }
+            })
             return {
                 "success": False,
                 "result": {
@@ -542,12 +538,12 @@ async def upload_status(operation_id: str):
                 },
             }
 
-        print(f"[Poll] Operation {operation_id} COMPLETED: assetId={asset_id}")
-        upload_operations[operation_id] = {
+        print(f"[Poll] Upload completed!")
+        upload_operations[operation_id].update({
             "status": "completed",
             "assetId": asset_id,
             "assetUrl": f"https://create.roblox.com/dashboard/creations/store/{asset_id}/configure",
-        }
+        })
         return {
             "success": True,
             "result": {
@@ -562,11 +558,11 @@ async def upload_status(operation_id: str):
     if data.get("error"):
         error = data["error"]
         error_msg = error.get("message", "Unknown error")
-        print(f"[Poll] Operation {operation_id} error (not done): {error_msg}")
-        upload_operations[operation_id] = {
+        print(f"[Poll] Upload error: {error_msg[:80]}")
+        upload_operations[operation_id].update({
             "status": "failed",
             "error": error_msg,
-        }
+        })
         return {
             "success": False,
             "result": {
@@ -753,26 +749,20 @@ class BridgeGUI:
         self._build_footer()
 
     def _build_header(self):
-        frm = tk.Frame(self.root, bg=self.C_CARD, pady=22)
+        frm = tk.Frame(self.root, bg=self.C_CARD, pady=24)
         frm.pack(fill=tk.X)
-        # "Meshy" in lime, rest in white
-        title_row = tk.Frame(frm, bg=self.C_CARD)
-        title_row.pack()
+        row = tk.Frame(frm, bg=self.C_CARD)
+        row.pack()
         tk.Label(
-            title_row, text="Meshy",
-            font=("Segoe UI", 18, "bold"),
+            row, text="Meshy",
+            font=("Segoe UI", 20, "bold"),
             fg=self.C_LIME, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
         tk.Label(
-            title_row, text=" Roblox Bridge",
-            font=("Segoe UI", 18, "bold"),
+            row, text=" Roblox Bridge",
+            font=("Segoe UI", 20, "bold"),
             fg=self.C_TEXT, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
-        tk.Label(
-            frm, text=f"localhost:{self.port}",
-            font=("Segoe UI", 10),
-            fg=self.C_DIM, bg=self.C_CARD,
-        ).pack(pady=(4, 0))
 
     def _build_status_card(self):
         outer = tk.Frame(self.root, bg=self.C_BG, padx=20, pady=16)
