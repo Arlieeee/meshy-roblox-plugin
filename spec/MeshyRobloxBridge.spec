@@ -1,11 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 import sys
 
+root = os.path.abspath(os.path.join(SPECPATH, '..'))
+
 a = Analysis(
-    ['server.py'],
-    pathex=[],
+    [os.path.join(root, 'server.py')],
+    pathex=[root],
     binaries=[],
-    datas=[('assets/icon.ico', '.')],
+    datas=[(os.path.join(root, 'assets/icon.ico'), '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -25,7 +28,7 @@ if sys.platform == 'win32':
         a.datas,
         [],
         name='MeshyRobloxBridge',
-        icon='assets/icon.ico',
+        icon=os.path.join(root, 'assets/icon.ico'),
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -49,7 +52,7 @@ else:
         a.datas,
         [],
         name='MeshyRobloxBridge',
-        icon='assets/icon.icns',   # convert assets/icon.ico → assets/icon.icns on mac
+        icon=os.path.join(root, 'assets/icon.icns'),  # convert assets/icon.ico → assets/icon.icns on mac
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -67,7 +70,7 @@ else:
     app = BUNDLE(
         exe,
         name='MeshyRobloxBridge.app',
-        icon='assets/icon.icns',
+        icon=os.path.join(root, 'assets/icon.icns'),
         bundle_identifier='ai.meshy.roblox-bridge',
         info_plist={
             'CFBundleDisplayName': 'Meshy Roblox Bridge',
