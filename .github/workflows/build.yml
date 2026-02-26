@@ -28,6 +28,14 @@ jobs:
         with:
           python-version: '3.11'
 
+      # macOS: Install python-tk for proper tkinter support
+      - name: Install python-tk (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install python-tk@3.11
+          # Verify tkinter works
+          python3.11 -c "import tkinter; print('tkinter OK')"
+
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller pillow
 

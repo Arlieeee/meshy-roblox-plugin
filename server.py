@@ -23,6 +23,7 @@ import html
 import io
 import json
 import os
+import platform
 import queue
 import secrets
 import sys
@@ -709,12 +710,21 @@ class BridgeGUI:
     C_DIM     = "#888888"
     C_LOG_BG  = "#111111"
 
+    # ── Platform-appropriate system fonts (no commercial fonts) ───
+    _IS_MAC = platform.system() == "Darwin"
+    # Use TkDefaultFont which is guaranteed to exist on all platforms
+    FONT_UI   = "TkDefaultFont"
+    FONT_MONO = "TkFixedFont"
+
     def __init__(self, port: int):
         self.port = port
         self._q: "queue.Queue[str]" = queue.Queue()
         self.root = tk.Tk()
+        self.root.withdraw()   # hide until fully built to avoid blank flash on macOS
         self._build_window()
         self._build_ui()
+        self.root.update_idletasks()
+        self.root.deiconify()  # show fully-rendered window
 
     # ── Window ────────────────────────────────────────────────────
 
@@ -755,12 +765,12 @@ class BridgeGUI:
         row.pack()
         tk.Label(
             row, text="Meshy",
-            font=("Segoe UI", 20, "bold"),
+            font=(self.FONT_UI, 20, "bold"),
             fg=self.C_LIME, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
         tk.Label(
             row, text=" Roblox Bridge",
-            font=("Segoe UI", 20, "bold"),
+            font=(self.FONT_UI, 20, "bold"),
             fg=self.C_TEXT, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
 
@@ -783,12 +793,12 @@ class BridgeGUI:
     def _status_row(self, parent, label: str):
         row = tk.Frame(parent, bg=self.C_CARD)
         row.pack(fill=tk.X)
-        tk.Label(row, text=label, font=("Segoe UI", 11),
+        tk.Label(row, text=label, font=(self.FONT_UI, 11),
                  fg=self.C_DIM, bg=self.C_CARD).pack(side=tk.LEFT)
         dot = tk.Canvas(row, width=10, height=10,
                         bg=self.C_CARD, highlightthickness=0)
         dot.pack(side=tk.RIGHT)
-        val = tk.Label(row, text="", font=("Segoe UI", 11, "bold"),
+        val = tk.Label(row, text="", font=(self.FONT_UI, 11, "bold"),
                        fg=self.C_TEXT, bg=self.C_CARD)
         val.pack(side=tk.RIGHT, padx=(0, 10))
         return dot, val
@@ -796,12 +806,12 @@ class BridgeGUI:
     def _build_log_area(self):
         outer = tk.Frame(self.root, bg=self.C_BG, padx=20)
         outer.pack(fill=tk.BOTH, expand=True)
-        tk.Label(outer, text="Activity Log", font=("Segoe UI", 9),
+        tk.Label(outer, text="Activity Log", font=(self.FONT_UI, 9),
                  fg=self.C_DIM, bg=self.C_BG).pack(anchor=tk.W, pady=(0, 4))
         self._log = tk.Text(
             outer,
             bg=self.C_LOG_BG, fg=self.C_DIM,
-            font=("Consolas", 9),
+            font=(self.FONT_MONO, 9),
             relief=tk.FLAT, padx=12, pady=10,
             wrap=tk.WORD, state=tk.DISABLED,
             height=14,
@@ -820,7 +830,7 @@ class BridgeGUI:
         tk.Label(
             frm,
             text="Open Meshy Workspace to start using the bridge",
-            font=("Segoe UI", 9),
+            font=(self.FONT_UI, 9),
             fg=self.C_DIM, bg=self.C_CARD,
         ).pack()
 

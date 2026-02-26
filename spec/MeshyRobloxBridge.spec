@@ -4,12 +4,30 @@ import sys
 
 root = os.path.abspath(os.path.join(SPECPATH, '..'))
 
+# Platform-specific icon data
+if sys.platform == 'win32':
+    icon_datas = [(os.path.join(root, 'assets/icon.ico'), '.')]
+else:
+    icon_datas = [(os.path.join(root, 'assets/icon.icns'), '.')]
+
 a = Analysis(
     [os.path.join(root, 'server.py')],
     pathex=[root],
     binaries=[],
-    datas=[(os.path.join(root, 'assets/icon.ico'), '.')],
-    hiddenimports=[],
+    datas=icon_datas,
+    hiddenimports=[
+        'uvicorn.logging',
+        'uvicorn.loops',
+        'uvicorn.loops.auto',
+        'uvicorn.protocols',
+        'uvicorn.protocols.http',
+        'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.websockets',
+        'uvicorn.protocols.websockets.auto',
+        'uvicorn.lifespan',
+        'uvicorn.lifespan.on',
+        'click',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -44,15 +62,17 @@ if sys.platform == 'win32':
     )
 
 # ── macOS ──────────────────────────────────────────────────────
+# Use onedir mode (exclude_binaries=True + COLLECT) so that Tcl/Tk
+# libraries are placed inside the .app bundle properly. Onefile mode
+# combined with an .app bundle is broken on macOS and causes a blank window.
 else:
     exe = EXE(
         pyz,
         a.scripts,
-        a.binaries,
-        a.datas,
         [],
+        exclude_binaries=True,     # onedir: binaries go into COLLECT, not the exe
         name='MeshyRobloxBridge',
-        icon=os.path.join(root, 'assets/icon.icns'),  # convert assets/icon.ico → assets/icon.icns on mac
+        icon=os.path.join(root, 'assets/icon.icns'),
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -67,8 +87,19 @@ else:
         entitlements_file=None,
     )
 
-    app = BUNDLE(
+    coll = COLLECT(
         exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=False,
+        upx_exclude=[],
+        name='MeshyRobloxBridge',
+    )
+
+    app = BUNDLE(
+        coll,
         name='MeshyRobloxBridge.app',
         icon=os.path.join(root, 'assets/icon.icns'),
         bundle_identifier='ai.meshy.roblox-bridge',

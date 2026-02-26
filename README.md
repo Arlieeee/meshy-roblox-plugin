@@ -112,6 +112,24 @@ meshy-roblox-plugin/
 
 The project uses a single PyInstaller spec file for both platforms. Build must be run on the target platform (cross-compilation is not supported).
 
+**Prerequisites:**
+
+- **macOS**: Must use Homebrew Python with tkinter support (system Python causes blank window)
+  ```bash
+  brew install python-tk@3.11
+  /opt/homebrew/bin/python3.11 -m venv venv-build
+  source venv-build/bin/activate
+  python -c "import tkinter; print('tkinter OK')"  # Verify
+  ```
+
+- **Windows**: Any Python 3.11+ works (tkinter included)
+  ```bash
+  python -m venv venv-build
+  venv-build\Scripts\activate
+  ```
+
+**Build:**
+
 ```bash
 # Install all dependencies including pyinstaller and pillow
 pip install -r requirements.txt
@@ -121,8 +139,8 @@ pyinstaller spec/MeshyRobloxBridge.spec
 ```
 
 Output is in `dist/`:
-- Windows → `dist/MeshyRobloxBridge.exe`
-- macOS → `dist/MeshyRobloxBridge.app`
+- Windows → `dist/MeshyRobloxBridge.exe` (single file)
+- macOS → `dist/MeshyRobloxBridge.app` (app bundle)
 
 **macOS only:** generate `assets/icon.icns` before building (the CI does this automatically):
 
@@ -132,6 +150,8 @@ sips -z 16 16   assets/icon.ico --out icon.iconset/icon_16x16.png
 # ... (see .github/workflows/build.yml for the full list)
 iconutil -c icns icon.iconset -o assets/icon.icns
 ```
+
+**Important:** The spec file uses onedir mode for macOS (required for proper tkinter bundling) and onefile mode for Windows.
 
 ### CI / Automated Builds
 
