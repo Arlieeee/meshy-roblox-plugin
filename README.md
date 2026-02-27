@@ -18,11 +18,11 @@ Download the latest release for your platform from the [Releases](../../releases
 | Platform | File |
 |----------|------|
 | Windows  | `MeshyRobloxBridge.exe` |
-| macOS    | `MeshyRobloxBridge.app` |
+| macOS    | `MeshyRobloxBridge.dmg` |
 
 ### Usage
 
-1. **Run** `MeshyRobloxBridge.exe` (Windows) or `MeshyRobloxBridge.app` (macOS)
+1. **Run** `MeshyRobloxBridge.exe` (Windows) or open `MeshyRobloxBridge.dmg` and drag the app to Applications (macOS)
 2. The bridge window opens and shows **Server: Running**
 3. Go to [meshy.ai](https://www.meshy.ai), find a model, click **DCC Bridge → Send to Roblox**
 4. On first use, authorize your Roblox account in the popup — the bridge shows **Roblox Account: Connected**
