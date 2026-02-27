@@ -75,15 +75,13 @@ jobs:
         if: runner.os == 'macOS'
         run: pyinstaller spec/MeshyRobloxBridge.spec
 
-      # Create DMG with LZMA compression for smaller download size
-      - name: Create DMG (macOS)
+      # Zip the .app bundle to preserve directory structure when downloaded
+      # Use -y to preserve symlinks, which are common in .app bundles
+      - name: Zip app bundle (macOS)
         if: runner.os == 'macOS'
         run: |
-          hdiutil create -volname "MeshyRobloxBridge" \
-            -srcfolder dist/MeshyRobloxBridge.app \
-            -ov -format UDZO \
-            dist/MeshyRobloxBridge.dmg
-          ls -lh dist/MeshyRobloxBridge.dmg
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent MeshyRobloxBridge.app MeshyRobloxBridge-macos.zip
 
       - name: Upload artifact (Windows)
         if: runner.os == 'Windows'
@@ -98,5 +96,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MeshyRobloxBridge-macos
-          path: dist/MeshyRobloxBridge.dmg
+          path: dist/MeshyRobloxBridge-macos.zip
           retention-days: 30
