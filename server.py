@@ -788,7 +788,7 @@ class BridgeGUI:
             fg=self.C_LIME, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
         tk.Label(
-            row, text=" Roblox Bridge",
+            row, text="Roblox Bridge",
             font=(self.FONT_UI, 14, "bold"),
             fg=self.C_TEXT, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
@@ -955,7 +955,7 @@ class BridgeGUI:
             self.root.after(0, self._set_server_ok)
             self._q.put("Server started!")
             self._q.put("Open Meshy Workspace and click Send to Roblox to get started.")
-            self._q.put("─" * 25)
+            self._q.put("─" * 18)
             server.run()
         except OSError:
             self._q.put("Port already in use — another instance may be running.")
@@ -986,7 +986,7 @@ class BridgeGUI:
         # appears first in the log (queue is FIFO, server messages follow).
         for line in [
             "Meshy Roblox Bridge v0.1.0",
-            "─" * 25,
+            "─" * 18,
         ]:
             self._q.put(line)
 
