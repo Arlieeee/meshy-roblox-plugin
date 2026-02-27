@@ -27,6 +27,7 @@ Download the latest release for your platform from the [Releases](../../releases
      ```bash
      xattr -cr /path/to/MeshyRobloxBridge.app
      ```
+     and then double click `MeshyRobloxBridge.app` to run.
 2. The bridge window opens and shows **Server: Running**
 3. Go to [meshy.ai](https://www.meshy.ai), find a model, click **DCC Bridge → Send to Roblox**
 4. On first use, authorize your Roblox account in the popup — the bridge shows **Roblox Account: Connected**
