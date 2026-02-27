@@ -17,7 +17,7 @@ Download the latest release for your platform from the [Releases](../../releases
 
 | Platform | File |
 |----------|------|
-| Windows  | `MeshyRobloxBridge-win.zip` |
+| Windows  | `MeshyRobloxBridge-windows.zip` |
 | macOS    | `MeshyRobloxBridge-macos.zip` |
 
 ### Usage
