@@ -44,8 +44,6 @@ a = Analysis(
         'wx',
         'test',
         'unittest',
-        'email',
-        'html',
         'http.server',
         'xmlrpc',
         'pydoc',

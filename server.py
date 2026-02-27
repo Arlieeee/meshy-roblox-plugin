@@ -740,8 +740,9 @@ class BridgeGUI:
                 pass
 
         self.root.title("Meshy Roblox Bridge")
-        self.root.geometry("500x600")
-        self.root.resizable(False, False)
+        self.root.geometry("300x350")
+        self.root.minsize(250, 280)
+        self.root.resizable(True, True)
         self.root.configure(bg=self.C_BG)
         try:
             base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
@@ -759,32 +760,32 @@ class BridgeGUI:
         self._build_footer()
 
     def _build_header(self):
-        frm = tk.Frame(self.root, bg=self.C_CARD, pady=24)
+        frm = tk.Frame(self.root, bg=self.C_CARD, pady=12)
         frm.pack(fill=tk.X)
         row = tk.Frame(frm, bg=self.C_CARD)
         row.pack()
         tk.Label(
             row, text="Meshy",
-            font=(self.FONT_UI, 20, "bold"),
+            font=(self.FONT_UI, 14, "bold"),
             fg=self.C_LIME, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
         tk.Label(
             row, text=" Roblox Bridge",
-            font=(self.FONT_UI, 20, "bold"),
+            font=(self.FONT_UI, 14, "bold"),
             fg=self.C_TEXT, bg=self.C_CARD,
         ).pack(side=tk.LEFT)
 
     def _build_status_card(self):
-        outer = tk.Frame(self.root, bg=self.C_BG, padx=20, pady=16)
+        outer = tk.Frame(self.root, bg=self.C_BG, padx=12, pady=8)
         outer.pack(fill=tk.X)
-        card = tk.Frame(outer, bg=self.C_CARD, padx=20, pady=18)
+        card = tk.Frame(outer, bg=self.C_CARD, padx=12, pady=10)
         card.pack(fill=tk.X)
 
         self._server_dot, self._server_lbl = self._status_row(card, "Server")
         self._dot_set(self._server_dot, self.C_GRAY)
         self._server_lbl.configure(text="Starting…", fg=self.C_DIM)
 
-        tk.Frame(card, bg=self.C_BORDER, height=1).pack(fill=tk.X, pady=12)
+        tk.Frame(card, bg=self.C_BORDER, height=1).pack(fill=tk.X, pady=8)
 
         self._roblox_dot, self._roblox_lbl = self._status_row(card, "Roblox Account")
         self._dot_set(self._roblox_dot, self.C_GRAY)
@@ -793,28 +794,28 @@ class BridgeGUI:
     def _status_row(self, parent, label: str):
         row = tk.Frame(parent, bg=self.C_CARD)
         row.pack(fill=tk.X)
-        tk.Label(row, text=label, font=(self.FONT_UI, 11),
+        tk.Label(row, text=label, font=(self.FONT_UI, 10),
                  fg=self.C_DIM, bg=self.C_CARD).pack(side=tk.LEFT)
-        dot = tk.Canvas(row, width=10, height=10,
+        dot = tk.Canvas(row, width=8, height=8,
                         bg=self.C_CARD, highlightthickness=0)
         dot.pack(side=tk.RIGHT)
-        val = tk.Label(row, text="", font=(self.FONT_UI, 11, "bold"),
+        val = tk.Label(row, text="", font=(self.FONT_UI, 10, "bold"),
                        fg=self.C_TEXT, bg=self.C_CARD)
-        val.pack(side=tk.RIGHT, padx=(0, 10))
+        val.pack(side=tk.RIGHT, padx=(0, 8))
         return dot, val
 
     def _build_log_area(self):
-        outer = tk.Frame(self.root, bg=self.C_BG, padx=20)
+        outer = tk.Frame(self.root, bg=self.C_BG, padx=12)
         outer.pack(fill=tk.BOTH, expand=True)
-        tk.Label(outer, text="Activity Log", font=(self.FONT_UI, 9),
-                 fg=self.C_DIM, bg=self.C_BG).pack(anchor=tk.W, pady=(0, 4))
+        tk.Label(outer, text="Activity Log", font=(self.FONT_UI, 8),
+                 fg=self.C_DIM, bg=self.C_BG).pack(anchor=tk.W, pady=(0, 2))
         self._log = tk.Text(
             outer,
             bg=self.C_LOG_BG, fg=self.C_DIM,
-            font=(self.FONT_MONO, 9),
-            relief=tk.FLAT, padx=12, pady=10,
+            font=(self.FONT_MONO, 8),
+            relief=tk.FLAT, padx=8, pady=6,
             wrap=tk.WORD, state=tk.DISABLED,
-            height=14,
+            height=10,
         )
         self._log.pack(fill=tk.BOTH, expand=True)
         self._log.tag_configure("ts",     foreground="#444444")
@@ -825,12 +826,12 @@ class BridgeGUI:
         self._log.tag_configure("upload", foreground="#cccccc")
 
     def _build_footer(self):
-        frm = tk.Frame(self.root, bg=self.C_CARD, pady=13)
+        frm = tk.Frame(self.root, bg=self.C_CARD, pady=8)
         frm.pack(fill=tk.X, side=tk.BOTTOM)
         tk.Label(
             frm,
-            text="Open Meshy Workspace to start using the bridge",
-            font=(self.FONT_UI, 9),
+            text="Open Meshy Workspace to start",
+            font=(self.FONT_UI, 8),
             fg=self.C_DIM, bg=self.C_CARD,
         ).pack()
 
@@ -838,7 +839,7 @@ class BridgeGUI:
 
     def _dot_set(self, canvas: tk.Canvas, color: str):
         canvas.delete("all")
-        canvas.create_oval(1, 1, 9, 9, fill=color, outline="")
+        canvas.create_oval(1, 1, 7, 7, fill=color, outline="")
 
     # ── Logging ───────────────────────────────────────────────────
 
@@ -936,7 +937,7 @@ class BridgeGUI:
             self.root.after(0, self._set_server_ok)
             self._q.put("Server started!")
             self._q.put("Open Meshy Workspace and click Send to Roblox to get started.")
-            self._q.put("─" * 38)
+            self._q.put("─" * 25)
             server.run()
         except OSError:
             self._q.put("Port already in use — another instance may be running.")
@@ -967,7 +968,7 @@ class BridgeGUI:
         # appears first in the log (queue is FIFO, server messages follow).
         for line in [
             "Meshy Roblox Bridge v0.1.0",
-            "─" * 38,
+            "─" * 25,
         ]:
             self._q.put(line)
 
