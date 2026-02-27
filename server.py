@@ -755,11 +755,11 @@ class BridgeGUI:
         screen_h = self.root.winfo_screenheight()
 
         # Base size as percentage of screen, with min/max bounds
-        win_w = max(300, min(450, int(screen_w * 0.15)))
-        win_h = max(350, min(550, int(screen_h * 0.22)))
+        win_w = max(200 , min(450, int(screen_w * 0.12)))
+        win_h = max(350, min(550, int(screen_h * 0.23)))
 
         self.root.geometry(f"{win_w}x{win_h}+50+50")
-        self.root.minsize(280, 320)
+        self.root.minsize(200, 300)
         self.root.resizable(True, True)
         self.root.configure(bg=self.C_BG)
         try:
