@@ -710,11 +710,19 @@ class BridgeGUI:
     C_DIM     = "#888888"
     C_LOG_BG  = "#111111"
 
-    # ── Platform-appropriate system fonts (no commercial fonts) ───
+    # ── Platform-appropriate system fonts ───
     _IS_MAC = platform.system() == "Darwin"
-    # Use TkDefaultFont which is guaranteed to exist on all platforms
-    FONT_UI   = "TkDefaultFont"
-    FONT_MONO = "TkFixedFont"
+    _IS_WIN = platform.system() == "Windows"
+    # Use clean system fonts: SF Pro on macOS, Segoe UI on Windows
+    if _IS_MAC:
+        FONT_UI   = "SF Pro"
+        FONT_MONO = "SF Mono"
+    elif _IS_WIN:
+        FONT_UI   = "Segoe UI"
+        FONT_MONO = "Consolas"
+    else:
+        FONT_UI   = "TkDefaultFont"
+        FONT_MONO = "TkFixedFont"
 
     def __init__(self, port: int):
         self.port = port
